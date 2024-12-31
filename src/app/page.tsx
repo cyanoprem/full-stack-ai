@@ -1,11 +1,10 @@
 'use client';
 
-import { supabase } from "@/lib/supabase/supabase";
 import React from "react";
-import './globals.css';
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
+import supabase from "@/lib/supabase";
 
 interface DataType {
   id: number;
@@ -14,101 +13,144 @@ interface DataType {
 }
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [text, setText] = React.useState("");
+  const [texts, setTexts] = React.useState<DataType[]>([]);
+  const messagesEndRef = React.useRef<HTMLDivElement>(null);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  React.useEffect(() => {
+    scrollToBottom();
+  }, [texts]);
+
+  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setText(event.target.value);
+  };
+
+  const handleButtonClick = async () => {
+    if (!text.trim()) return;
+
+    const { data, error } = await supabase
+      .from("texts")
+      .insert({ content: text, response: "" })
+      .select();
+
+    if (error) {
+      console.log(error);
+    } else {
+      console.log(data);
+      const openaiApiUrl = "https://api.openai.com/v1/chat/completions";
+      const openaiApiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
+
+      const response = await fetch(openaiApiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${openaiApiKey}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            {
+              role: "developer",
+              content: "You are a helpful assistant."
+            },
+            {
+              role: "user",
+              content: text
+            }
+          ],
+          max_tokens: 2048,
+          temperature: 0.7
+        }),
+      });
+
+      const openaiResponse = await response.json();
+      const openaiResponseText = openaiResponse.choices[0].message.content;
+
+      if (data) {
+        const { data: updatedData, error: updateError } = await supabase
+          .from("texts")
+          .update({ response: openaiResponseText })
+          .eq("id", data[0].id)
+          .select();
+
+        if (updateError) {
+          console.log(updateError);
+        } else {
+          console.log(updatedData);
+        }
+      }
+      setText("");
+      fetchData();
+    }
+  };
+
+  const fetchData = async () => {
+    const { data, error } = await supabase
+      .from("texts")
+      .select("*")
+      .order('id', { ascending: true });
+
+    if (error) {
+      console.log(error);
+    } else {
+      setTexts(data);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleKeyPress = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      handleButtonClick();
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-screen bg-gray-100">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {texts.map((item) => (
+          <div key={item.id} className="space-y-2">
+            <div className="flex justify-end">
+              <div className="bg-blue-500 text-white rounded-lg py-2 px-4 max-w-md">
+                {item.content}
+              </div>
+            </div>
+            {item.response && (
+              <div className="flex justify-start">
+                <div className="bg-white text-gray-800 rounded-lg py-2 px-4 max-w-md shadow-sm">
+                  {item.response}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+        <div ref={messagesEndRef} />
+      </div>
+
+      <div className="border-t bg-white p-4">
+        <div className="max-w-4xl mx-auto flex gap-2">
+          <Input
+            type="text"
+            value={text}
+            onChange={handleInputChange}
+            onKeyPress={handleKeyPress}
+            placeholder="Type your message..."
+            className="flex-1"
+          />
+          <Button 
+            onClick={handleButtonClick}
+            className="bg-blue-500 hover:bg-blue-600"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+            Send
+          </Button>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </div>
     </div>
   );
 }
