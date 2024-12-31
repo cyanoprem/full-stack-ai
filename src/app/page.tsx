@@ -1,4 +1,17 @@
-import Image from "next/image";
+'use client';
+
+import { supabase } from "@/lib/supabase/supabase";
+import React from "react";
+import './globals.css';
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Card } from "@/components/ui/card"
+
+interface DataType {
+  id: number;
+  content: string;
+  response: string;
+}
 
 export default function Home() {
   return (
