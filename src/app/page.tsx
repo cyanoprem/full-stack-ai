@@ -1,9 +1,9 @@
+// /src/app/page.tsx
 'use client';
 
 import React from "react";
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import supabase from "@/lib/supabase";
 
 interface DataType {
   id: number;
@@ -28,75 +28,41 @@ export default function Home() {
     setText(event.target.value);
   };
 
-  const handleButtonClick = async () => {
-    if (!text.trim()) return;
-
-    const { data, error } = await supabase
-      .from("texts")
-      .insert({ content: text, response: "" })
-      .select();
-
-    if (error) {
-      console.log(error);
-    } else {
-      console.log(data);
-      const openaiApiUrl = "https://api.openai.com/v1/chat/completions";
-      const openaiApiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
-
-      const response = await fetch(openaiApiUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${openaiApiKey}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-4o-mini",
-          messages: [
-            {
-              role: "developer",
-              content: "You are a helpful assistant."
-            },
-            {
-              role: "user",
-              content: text
-            }
-          ],
-          max_tokens: 2048,
-          temperature: 0.7
-        }),
-      });
-
-      const openaiResponse = await response.json();
-      const openaiResponseText = openaiResponse.choices[0].message.content;
-
-      if (data) {
-        const { data: updatedData, error: updateError } = await supabase
-          .from("texts")
-          .update({ response: openaiResponseText })
-          .eq("id", data[0].id)
-          .select();
-
-        if (updateError) {
-          console.log(updateError);
-        } else {
-          console.log(updatedData);
-        }
+  const fetchData = async () => {
+    try {
+      const response = await fetch('/api/messages');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-      setText("");
-      fetchData();
+      const { data } = await response.json();
+      if (data) {
+        setTexts(data);
+      }
+    } catch (error) {
+      console.error('Error fetching messages:', error);
     }
   };
-
-  const fetchData = async () => {
-    const { data, error } = await supabase
-      .from("texts")
-      .select("*")
-      .order('id', { ascending: true });
-
-    if (error) {
-      console.log(error);
-    } else {
-      setTexts(data);
+  
+  const handleButtonClick = async () => {
+    if (!text.trim()) return;
+  
+    try {
+      const response = await fetch('/api/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ content: text }),
+      });
+  
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+  
+      setText("");
+      await fetchData();
+    } catch (error) {
+      console.error('Error:', error);
     }
   };
 
